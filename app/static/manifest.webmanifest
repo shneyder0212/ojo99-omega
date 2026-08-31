@@ -1,0 +1,9 @@
+{
+  "name": "OJO-99 Omega AUTO",
+  "short_name": "OJO-99",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101f",
+  "theme_color": "#0b1020",
+  "description": "Motor de análisis de resultados reales de lotería."
+}
