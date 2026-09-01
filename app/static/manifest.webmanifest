@@ -1,0 +1,9 @@
+{
+  "name": "OJO-99 Omega V6 Resilient + Validated",
+  "short_name": "OJO-99",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101f",
+  "theme_color": "#07101f",
+  "description": "OJO-99 con núcleo independiente, API propia y motores validados."
+}
