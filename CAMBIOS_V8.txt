@@ -1,0 +1,17 @@
+OJO-99 Omega V8 ARENA TOTAL
+===========================
+- TOP 5 números por lotería + MÁS FUEGO
+- TOP 5 palés por lotería + MÁS FUEGO
+- TOP 5 tripletas por lotería + MÁS FUEGO
+- ADN de candidatos Top 5
+- Detector de régimen semanal
+- Presión por decenas 7/14/30/histórico
+- Motor de fechas especiales
+- Consejo de Generales
+- Kino doble jugada A/B
+- Radar Total e inversos/jaladores/afinidad
+- Alertas máximas
+- Contador de aciertos con fecha
+- Walk-forward y anti-overfit
+- Red propia / DB-first / safe collector
+- CERO NÚMEROS AL AZAR
