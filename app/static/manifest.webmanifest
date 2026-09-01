@@ -1,9 +1,0 @@
-{
-  "name": "OJO-99 Omega V4",
-  "short_name": "OJO-99",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#07101f",
-  "theme_color": "#07101f",
-  "description": "Motor de análisis histórico y temporal de resultados reales."
-}
