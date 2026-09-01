@@ -1,53 +1,37 @@
-# OJO-99 Omega AUTO
+# OJO-99 Omega V4 Predictivo
 
-Versión automática para Render/iPhone/Android.
+## Regla permanente
+**CERO NÚMEROS AL AZAR.**
+Si no hay datos suficientes o la evidencia es débil, muestra `SIN SEÑAL`.
 
-## Principio no negociable
-**Nunca genera números al azar como recomendación.**
-Si no hay datos reales o evidencia suficiente, muestra `SIN SEÑAL`.
+## Qué añade V4
+- Calendario maestro por turno.
+- Zona horaria maestra: `America/Santo_Domingo`.
+- Sincronización automática de resultados recientes.
+- Backfill histórico incremental y respetuoso.
+- Memoria PostgreSQL.
+- Motor de frecuencia, recencia, atraso, día, reverso y transición.
+- Motor especializado de afinidad/palés.
+- Motor de tripletas observadas.
+- Walk-forward/backtesting temporal.
+- Métrica objetivo 2-DE-3.
+- Predicciones congeladas antes del sorteo.
+- Evaluación posterior.
+- Panel de rendimiento real.
+- Jugada Maestra solo con evidencia estricta.
+- Sin scraping agresivo ni evasión de bloqueos.
 
-## Automatización
-- Consulta periódica y prudente de una fuente pública de resultados.
-- Intervalo predeterminado: 15 minutos.
-- Deduplicación por lotería + fecha/hora.
-- Guarda la fuente de cada resultado.
-- Botón "Sincronizar ahora".
-- Mantiene la carga manual y CSV solo como respaldo.
-- Soporta sorteos de 3 números y sorteos de longitud variable como Super Kino TV.
-- No usa técnicas para evadir bloqueos.
-- User-Agent identificable, timeout corto y frecuencia limitada.
-- Caché implícita por deduplicación: no reescribe resultados ya guardados.
-
-## Fuentes
-El recolector automático incluido usa una página pública de resultados dominicanos:
+## Fuente
+Por defecto:
 https://loterianacional.com.do/resultados/
 
-Para históricos oficiales de Lotería Nacional existe además el portal de Datos Abiertos:
-https://datos.gov.do/dataset/resultados-de-sorteos-de-banca-loterianacional
-
-Para Kino TV puede verificarse contra LEIDSA:
-https://www.leidsa.com/
-
-**Importante:** una web externa puede cambiar su HTML. Si eso ocurre, el panel mostrará error de fuente sin inventar datos.
+El importador histórico intenta la misma fuente usando `?date=DD-MM-YYYY`.
+Si la web cambia de formato, OJO-99 registra el error y **no inventa resultados**.
 
 ## Render
-1. Sube este proyecto a GitHub o Render.
-2. Crea PostgreSQL en Render.
-3. Pon su `DATABASE_URL` en el servicio web.
-4. Deploy.
-5. Abre la URL HTTPS en iPhone.
-6. Safari > Compartir > Añadir a pantalla de inicio.
+Mantén tu `DATABASE_URL` actual.
+Sube este proyecto a GitHub y usa `Deploy latest commit`.
 
-## Variables
-- `AUTO_SYNC_ENABLED=true`
-- `AUTO_SYNC_MINUTES=15`
-- `RESULTS_SOURCE_URL=https://loterianacional.com.do/resultados/`
-
-## Ejecutar local
-```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-## Advertencia estadística
-OJO Score es una puntuación interna de evidencia; no es una probabilidad garantizada de premio.
+## Aviso
+OJO Score es evidencia interna, no garantía ni porcentaje real de premio.
+El panel de backtesting sirve para medir qué tan bien o mal funciona el sistema frente a datos reales.
