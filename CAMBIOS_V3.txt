@@ -1,9 +1,0 @@
-OJO-99 Omega V3
-- Calendario maestro de loterías y turnos.
-- Anguila 10 AM / 1 PM / 6 PM / 9 PM separados.
-- Primera, Suerte, Real, LoteDom, Florida, NY, Nacional, Loteka, Leidsa y Kino TV registrados.
-- Todos los sorteos aparecen aunque todavía no tengan datos.
-- Estado DATOS INSUFICIENTES en lugar de aparentar una señal.
-- Cero números aleatorios.
-- render.yaml con plan free.
-- psycopg corregido a 3.2.13.
