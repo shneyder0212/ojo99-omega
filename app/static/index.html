@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07101f"><link rel="manifest" href="/manifest.webmanifest">
+<title>OJO-99 V9 Supreme Lab</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#07101f;color:#f8fafc}
+body{margin:0;background:linear-gradient(180deg,#07101f,#111827);min-height:100vh}
+main{max-width:1100px;margin:auto;padding:18px}.muted{color:#9ca3af}.good{color:#86efac}.warn{color:#fbbf24}.bad{color:#fca5a5}
+.card{background:#121c2d;border:1px solid #26364d;border-radius:18px;padding:16px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+button,select,input{font:inherit;border-radius:12px;padding:11px;border:1px solid #334155;background:#0f172a;color:white}
+button{background:#1d4ed8;border:none;font-weight:700;cursor:pointer}.master{border:2px solid #f59e0b}
+table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #273449}.big{font-size:1.4rem;font-weight:800}
+</style></head>
+<body><main>
+<h1>👁️ OJO-99 V9 Supreme Lab</h1>
+<div class="muted">ARENA · ADN · Régimen Semanal · Consejo · Kino A/B · Auditoría</div>
+
+<div class="card"><b class="good">CERO NÚMEROS AL AZAR.</b> Si una fuente se bloquea, OJO-99 sigue trabajando con su memoria guardada.</div>
+
+<div class="grid">
+<div class="card"><h3>🛡️ Núcleo independiente</h3><div id="network">Consultando…</div><br><button id="syncBtn">Sincronizar fuentes</button></div>
+<div class="card"><h3>🧠 Memoria propia</h3><div id="history">Consultando…</div><br><button id="historyBtn">Cargar siguiente histórico</button></div>
+<div class="card"><h3>📥 Importar histórico propio</h3><input type="file" id="csv" accept=".csv"><br><br><button id="csvBtn">Importar CSV</button><div id="csvOut" class="muted"></div></div>
+</div>
+
+<div class="card"><h3>👁️ Estudio</h3><select id="lottery"></select>
+<button id="anBtn">Analizar</button><button id="freezeBtn">Congelar próxima predicción</button>
+<div id="analysisMsg" class="muted" style="margin-top:10px">Selecciona una lotería y pulsa Analizar.</div>
+<div id="v9Summary" class="muted" style="margin-top:8px">V9: esperando análisis.</div>
+<div id="status" class="muted" style="margin-top:10px"></div></div>
+
+<div id="master"></div>
+<div id="maxAlerts"></div>
+<div id="kinoBox"></div><div class="card"><h3>🎖️ Diagnóstico V7</h3><div id="v7diag" class="muted">Esperando análisis…</div></div>
+<div class="card">
+<h3>🛰️ Radar Total</h3>
+<div id="radarTotal" class="muted">Esperando análisis…</div>
+</div>
+<div class="grid">
+<div class="card">
+<h3>📡 Radar Top 20</h3>
+<div class="muted">Mismo ranking del Top 5, ampliado hasta #20.</div>
+<div id="radar20Box">Esperando análisis…</div>
+</div>
+
+<div class="card"><h3>🔥 Top 5 números</h3><div id="nums"></div></div>
+<div class="card"><h3>🧲 Top 5 palés</h3><div id="pairs"></div></div>
+<div class="card"><h3>🔺 Top 5 tripletas</h3><div id="triples"></div></div>
+<div class="card"><h3>➡️ Arrastres</h3><div id="trans"></div></div>
+</div>
+
+<div class="grid">
+<div class="card"><h3>🏆 Contador de aciertos</h3><div id="hitCounter">Sin aciertos evaluados.</div></div>
+<div class="card"><h3>📅 Historial de aciertos</h3><div id="hitLog">Sin registros.</div></div>
+</div>
+
+<div class="grid">
+<div class="card"><h3>🔥 MÁS FUEGO</h3><div id="fireBox">Esperando análisis…</div></div>
+<div class="card"><h3>🎖️ Consejo de Generales</h3><div id="councilBox">Esperando análisis…</div></div>
+<div class="card"><h3>🌡️ Régimen Semanal</h3><div id="regimeBox">Esperando análisis…</div></div>
+<div class="card"><h3>🔟 Presión por Decenas</h3><div id="decadeBox">Esperando análisis…</div></div>
+<div class="card"><h3>📅 Fecha Especial</h3><div id="dateBox">Esperando análisis…</div></div>
+</div>
+
+<div class="grid">
+<div class="card"><h3>🏆 Ranking de loterías</h3><div id="rankingBox">Esperando datos…</div></div>
+<div class="card"><h3>🩺 Frescura de datos</h3><div id="freshBox">Esperando datos…</div></div>
+</div>
+
+<div class="grid">
+<div class="card"><h3>🧪 Validación de motores</h3><div id="engines"></div></div>
+<div class="card"><h3>🎯 Rendimiento real</h3><div id="perf"></div></div>
+<div class="card"><h3>⏩ Walk-forward</h3><button id="btBtn">Probar pasado → futuro</button><div id="bt"></div></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const table=(a,fn)=>!a?.length?'<span class="muted">SIN SEÑAL</span>':'<table>'+a.map(fn).join('')+'</table>';
+
+async function loadNetwork(){
+ const r=await fetch('/api/network/status');const j=await r.json();
+ $('#network').innerHTML=`Memoria cruda: <b>${j.raw_observations}</b><br>Resultados propios: <b>${j.canonical_results}</b><br>Conflictos: <b>${j.conflicts}</b><br><br>${j.sources.map(s=>`${s.state==='HEALTHY'?'🟢':s.state==='PAUSED'?'🔴':'🟡'} ${s.key}: ${s.state}`).join('<br>')}`;
+}
+async function loadHistory(){
+ const r=await fetch('/api/network/history-status');const j=await r.json();
+ $('#history').innerHTML=`Resultados: <b>${j.canonical_results}</b><br>Retrocediendo: <b>${j.cursor_date}</b><br>Objetivo: ${j.target_date}<br>Caché: ${j.cached_requests}`;
+}
+async function loadLotteries(){
+ const r=await fetch('/api/lotteries');const j=await r.json();
+ $('#lottery').innerHTML=j.lotteries.map(x=>`<option value="${x.name}">${x.display} · memoria ${x.draw_count}</option>`).join('');
+}
+
+async function ranking(){
+ const r=await fetch('/api/ranking');
+ const j=await r.json();
+ const rows=(j.ranking||[]).slice(0,5);
+ $('#rankingBox').innerHTML=rows.length
+ ? '<table>'+rows.map(x=>`<tr><td><b>#${x.rank} ${x.display}</b><br><small>${x.status} · muestra ${x.evaluated}</small></td><td>${x.ranking_score}</td></tr>`).join('')+'</table>'
+ : '<span class="muted">Todavía sin predicciones evaluadas.</span>';
+}
+
+async function freshness(){
+ const r=await fetch('/api/freshness');
+ const j=await r.json();
+ const bad=(j.lotteries||[]).filter(x=>x.state!=='FRESCO').slice(0,8);
+ if(!bad.length){
+   $('#freshBox').innerHTML='<span class="good">🟢 Todas las loterías con datos recientes.</span>';
+   return;
+ }
+ $('#freshBox').innerHTML=bad.map(x=>{
+   const icon=x.state==='SIN_DATOS'?'🔴':x.state==='MUY_ATRASADO'?'🟠':'🟡';
+   return `${icon} ${x.display}: <b>${x.state}</b>`;
+ }).join('<br>');
+}
+
+async function analyze(){
+ const l=$('#lottery').value;
+ if(!l){
+   $('#analysisMsg').innerHTML='⚠️ Selecciona una lotería.';
+   return;
+ }
+
+ const btn=$('#anBtn');
+ const oldText=btn.textContent;
+ btn.disabled=true;
+ btn.textContent='Analizando…';
+ $('#analysisMsg').innerHTML='⏳ Analizando <b>'+l+'</b> con la memoria disponible…';
+
+ try{
+   const r=await fetch('/api/analyze?lottery='+encodeURIComponent(l), {cache:'no-store'});
+   if(!r.ok){
+     throw new Error('HTTP '+r.status);
+   }
+   const j=await r.json();
+   const r20=j.radar_top20||{};
+   if(r20.status==='OK'){
+     const rows=(r20.numbers||[]).map(x=>{
+       const icon=x.rank<=5?'🔥':x.rank<=10?'🟠':'🟡';
+       return `<tr><td>${icon} #${x.rank}</td><td><b>${x.number}</b></td><td>${x.score}/100</td></tr>`;
+     }).join('');
+     $('#radar20Box').innerHTML=
+       `<table>${rows}</table>
+        <small>
+        Referencia aleatoria: Top 5 ${r20.baseline_pct?.top5??'—'}% ·
+        Top 10 ${r20.baseline_pct?.top10??'—'}% ·
+        Top 20 ${r20.baseline_pct?.top20??'—'}%
+        </small>`;
+   }else{
+     $('#radar20Box').innerHTML=
+       `<span class="muted">🟡 ${r20.draw_count??0} sorteos en memoria. Se necesitan 30 para publicar Radar Top 20.</span>`;
+   }
+
+   const v9=j.v9||{};
+   if(v9.state){
+     const mf=v9.more_fire||{};
+     const a=mf.number?.number?` · 🔥 Nº ${mf.number.number}`:'';
+     const b=mf.pair?.pair?` · 🔥 Palé ${mf.pair.pair.join('–')}`:'';
+     const c=mf.triple?.triple?` · 🔥 Tripleta ${mf.triple.triple.join('–')}`:'';
+     $('#v9Summary').innerHTML=`🧠 <b>V9 ${v9.state}</b> · Confianza ${v9.confidence} · Calidad ${v9.quality}/100 · Motores ${v9.validated_engines}${a}${b}${c}`;
+   }
+
+   if(j.draw_count<30){
+     $('#analysisMsg').innerHTML=
+       '🟡 <b>Análisis completado.</b> '+j.draw_count+
+       ' sorteos en memoria. Se necesitan al menos 30 para publicar Top 5. No se generan números al azar.';
+   }else{
+     const n=(j.top_numbers||[]).length;
+     const p=(j.top_pairs||[]).length;
+     const t=(j.top_triples||[]).length;
+     $('#analysisMsg').innerHTML=
+       '✅ <b>Análisis completado.</b> Memoria: '+j.draw_count+
+       ' sorteos · Top números: '+n+' · Palés: '+p+' · Tripletas: '+t+'.';
+   }
+
+   $('#status').innerHTML=j.draw_count<30
+     ? `<b>DATOS INSUFICIENTES</b> · ${j.draw_count} sorteos`
+     : `${j.status} · ${j.draw_count} sorteos`;
+
+   $('#nums').innerHTML=table(j.top_numbers,x=>`<tr><td><b>${x.number}</b></td><td>${x.score}/100</td></tr>`);
+   $('#pairs').innerHTML=table(j.top_pairs,x=>`<tr><td><b>${x.pair.join('–')}</b></td><td>${x.score}/100</td><td>x${x.lift}</td></tr>`);
+   $('#triples').innerHTML=table(j.top_triples,x=>`<tr><td><b>${x.triple.join('–')}</b></td><td>${x.score}/100</td></tr>`);
+   $('#trans').innerHTML=table(j.transitions,x=>`<tr><td>${x.from} → ${x.to}</td><td>${Math.round(x.rate*100)}%</td></tr>`);
+
+   const ev=j.engine_validation||{};
+   $('#engines').innerHTML=Object.keys(ev).length
+     ? '<table>'+Object.entries(ev).map(([k,v])=>`<tr><td>${k}</td><td>lift ${v.lift.toFixed(2)}</td><td>peso ${v.weight.toFixed(2)}</td></tr>`).join('')+'</table>'
+     : '<span class="muted">Todavía sin muestra suficiente.</span>';
+
+   $('#master').innerHTML=j.command_signal
+    ? `<div class="card master"><h2>🎖️ COMANDO SUPREMO</h2><div class="big">${j.command_signal.pair.join(' – ')}</div><p>Score ${j.command_signal.score}/100 · calidad ${j.command_signal.quality}/100</p><p>Motores validados: ${j.command_signal.validated_engines}</p><small>${j.command_signal.warning}</small></div>`
+    : j.master_play
+    ? `<div class="card master"><h2>🚨 JUGADA MAESTRA</h2><div class="big">${j.master_play.pair.join(' – ')}</div><p>OJO Score ${j.master_play.score}/100</p><p>${j.master_play.reason}</p></div>`
+    : `<div class="card"><b>👀 OJO-99 VIGILANDO</b><div class="muted">Sin señal extrema validada.</div></div>`;
+
+   const ma=j.max_alerts||{};
+   let alertHtml='';
+   if(ma.number_alert){
+     alertHtml+=`<div class="card master"><h2>🚨 ${ma.number_alert.status}</h2><div class="big">${ma.number_alert.number}</div><p>Score interno: 100/100</p><small>${ma.number_alert.warning}</small></div>`;
+   }
+   if(ma.pair_alert){
+     alertHtml+=`<div class="card master"><h2>🚨 ${ma.pair_alert.status}</h2><div class="big">${ma.pair_alert.pair.join(' – ')}</div><p>Score interno: 100/100 · lift ${ma.pair_alert.lift}</p><small>${ma.pair_alert.warning}</small></div>`;
+   }
+   if(ma.triple_alert){
+     alertHtml+=`<div class="card master"><h2>🚨 ${ma.triple_alert.status}</h2><div class="big">${ma.triple_alert.triple.join(' – ')}</div><p>Score interno: 100/100</p><small>${ma.triple_alert.warning}</small></div>`;
+   }
+   $('#maxAlerts').innerHTML=alertHtml;
+
+   const kr=j.kino_radar;
+   if(kr){
+     const kn=(kr.top_numbers||[]).slice(0,10).map(x=>`${x.number}(${x.stability_score})`).join(', ')||'—';
+     const kp=(kr.hot_affinity_pairs||[]).slice(0,5).map(x=>`${x.pair.join('–')} lift ${x.lift}`).join(', ')||'—';
+     const ka=(kr.alerts||[]).map(x=>x.type==='KINO_NUMERO_MAXIMO'
+        ? `🚨 KINO NÚMERO MÁXIMO: ${x.number} · score interno 100/100`
+        : `🚨 KINO PAREJA MÁXIMA: ${x.pair.join('–')} · score interno 100/100`
+     ).join('<br>')||'Sin alerta Kino máxima.';
+     $('#kinoBox').innerHTML=`<div class="card"><h2>🎯 KINO RADAR ESPECIAL</h2>
+       Memoria Kino: <b>${kr.draw_count}</b><br>
+       Top estabilidad: <b>${kn}</b><br>
+       Afinidades fuertes: <b>${kp}</b><br><br>
+       ${ka}<br><small>Los 100/100 son scores internos, no certeza matemática.</small>
+     </div>`;
+   }else{
+     $('#kinoBox').innerHTML='';
+   }
+
+   const v=j.v7||{};
+   $('#v7diag').innerHTML=`Calidad de datos: <b>${v.quality??'—'}/100</b><br>Puerta: <b>${v.gate||'—'}</b><br>Motores validados: <b>${v.validated_engines??0}</b><br>Drift reciente: <b>${v.regime?.drift??'—'}</b>`;
+
+   const rt=j.radar_total||{};
+   const fmtPairs=(arr,key='pair')=>(arr||[]).slice(0,5).map(x=>`${(x[key]||[]).join('–')}${x.lift?` (lift ${x.lift})`:''}`).join(', ')||'—';
+   const fmtAttr=arr=>(arr||[]).slice(0,5).map(x=>`${x.from}→${x.to} (${Math.round((x.rate||0)*100)}%)`).join(', ')||'—';
+   const fmtNums=arr=>(arr||[]).slice(0,5).map(x=>`${x.number}(${x.count})`).join(', ')||'—';
+   $('#radarTotal').innerHTML=`
+   Últimos números observados: <b>${(rt.last_numbers||[]).join(' - ')||'—'}</b><br>
+   🔄 Inversos: <b>${fmtPairs(rt.reverse_pairs)}</b><br>
+   👥 Compañeros/afinidad: <b>${fmtPairs(rt.companions)}</b><br>
+   🧲 Jaladores +1 sorteo: <b>${fmtAttr(rt.attractors)}</b><br>
+   ⏩ Jaladores +2 sorteos: <b>${fmtAttr(rt.lag2_attractors)}</b><br>
+   📅 Día de semana: <b>${fmtNums(rt.calendar?.weekday)}</b><br>
+   📆 Día del mes: <b>${fmtNums(rt.calendar?.day_of_month)}</b><br>
+   🗓️ Mes actual: <b>${fmtNums(rt.calendar?.month)}</b>`;
+
+   const v8=j.v8||{};
+   const fire=v8.fire||{};
+   const fn=(fire.numbers||[]).map(x=>`${x.rank}. ${x.number}${x.fire?' 🔥 '+x.fire:''}`).join('<br>')||'SIN SEÑAL';
+   const fp=(fire.pairs||[]).map(x=>`${x.rank}. ${(x.pair||[]).join('–')}${x.fire?' 🔥 '+x.fire:''}`).join('<br>')||'SIN SEÑAL';
+   const ft=(fire.triples||[]).map(x=>`${x.rank}. ${(x.triple||[]).join('–')}${x.fire?' 🔥 '+x.fire:''}`).join('<br>')||'SIN SEÑAL';
+   $('#fireBox').innerHTML=`<b>Números</b><br>${fn}<br><br><b>Palés</b><br>${fp}<br><br><b>Tripletas</b><br>${ft}`;
+
+   const council=v8.council||{};
+   $('#councilBox').innerHTML=(council.votes||[]).map(x=>`${x.active?'🟢':'⚪'} ${x.general}: ${x.strength}`).join('<br>')||'SIN SEÑAL';
+
+   const rg=v8.regime_weekly||{};
+   $('#regimeBox').innerHTML=rg.signals?Object.entries(rg.signals).map(([k,v])=>`${k}: <b>${v}</b>`).join('<br>'):rg.status||'—';
+
+   const dec=(v8.decade_pressure?.['14']||[]).slice().sort((a,b)=>b.share-a.share).slice(0,5);
+   $('#decadeBox').innerHTML=dec.map(x=>`${x.decade}: <b>${Math.round(x.share*100)}%</b>`).join('<br>')||'—';
+
+   const sd=v8.special_date||{};
+   $('#dateBox').innerHTML=`${sd.date||'—'}<br>${(sd.top||[]).slice(0,5).map(x=>`${x.number} (${x.score})`).join(', ')||'Sin señal especial'}`;
+
+   const kd=j.kino_double_play;
+   if(kd && (kd.status==='OK'||kd.status==='COBERTURA LIMITADA')){
+     $('#kinoBox').innerHTML += `<div class="card master"><h3>🎯 KINO DOBLE JUGADA</h3>
+     <b>Jugada A:</b> ${(kd.A||[]).join(' - ')}<br>
+     <b>Jugada B:</b> ${(kd.B||[]).join(' - ')}<br>
+     <small>A concentra consenso; B amplía cobertura. Ninguna es aleatoria.</small></div>`;
+   }
+
+   await Promise.all([perf(),hitCounter(),hitLog()]);
+ }catch(err){
+   console.error(err);
+   $('#analysisMsg').innerHTML=
+     '🔴 <b>Error al analizar.</b> '+err.message+
+     '. La aplicación no generó números.';
+ }finally{
+   btn.disabled=false;
+   btn.textContent=oldText;
+ }
+}
+
+async function hitCounter(){
+ const l=$('#lottery').value;
+ const r=await fetch('/api/hit-counter?lottery='+encodeURIComponent(l));
+ const j=await r.json();
+ const s=j.summary?.[0];
+ if(!s){$('#hitCounter').textContent='Sin datos.';return;}
+ $('#hitCounter').innerHTML=`
+ Sorteos evaluados: <b>${s.evaluated}</b><br>
+ Top 5 ≥1 número: <b>${s.top5_numbers}</b><br>
+ Objetivo 2-DE-3: <b>${s.two_of_three}</b><br>
+ Palés acertados: <b>${s.top5_pairs}</b><br>
+ Tripletas acertadas: <b>${s.top5_triples}</b><br>
+ Jugada Maestra: <b>${s.master}</b><br>
+ Último acierto: <b>${s.last_hit_date||'—'}</b>
+ `;
+}
+
+async function hitLog(){
+ const l=$('#lottery').value;
+ const r=await fetch('/api/hit-log?lottery='+encodeURIComponent(l)+'&limit=30');
+ const j=await r.json();
+ if(!j.hits?.length){
+   $('#hitLog').innerHTML='<span class="muted">Todavía no hay aciertos registrados.</span>';
+   return;
+ }
+ $('#hitLog').innerHTML='<table>'+j.hits.map(x=>`
+   <tr>
+    <td><b>${x.date_santo_domingo}</b><br><small>${x.time_santo_domingo} RD</small></td>
+    <td>${x.hit_types.join(', ')}</td>
+    <td>${(x.result||[]).map(n=>String(n).padStart(2,'0')).join(' - ')}</td>
+   </tr>`).join('')+'</table>';
+}
+
+async function perf(){
+ const l=$('#lottery').value;const r=await fetch('/api/performance?lottery='+encodeURIComponent(l));const j=await r.json();const f=x=>x==null?'—':x+'%';
+ $('#perf').innerHTML=`Estado: <b>${j.sample_status}</b><br>Evaluadas: ${j.evaluated}<br>≥1 Top 5: <b>${f(j.top5_numbers)}</b><br>2-DE-3: <b>${f(j.two_of_three)}</b><br>Palés: <b>${f(j.top5_pairs)}</b><br>Tripletas: <b>${f(j.top5_triples)}</b><br>Maestra: ${j.master_hits}/${j.master_alerts} (${f(j.master_pct)})`;
+}
+$('#syncBtn').onclick=async()=>{await fetch('/api/network/sync-now',{method:'POST'});await Promise.all([loadNetwork(),loadLotteries()]);await analyze();};
+$('#historyBtn').onclick=async()=>{await fetch('/api/network/history-step',{method:'POST'});await Promise.all([loadHistory(),loadNetwork(),loadLotteries()]);await analyze();};
+$('#freezeBtn').onclick=async()=>{const f=new FormData();f.set('lottery',$('#lottery').value);const r=await fetch('/api/freeze-next',{method:'POST',body:f});const j=await r.json();alert(j.ok?'Predicción congelada.':'No congelada: '+j.reason);};
+$('#btBtn').onclick=async()=>{const l=$('#lottery').value;$('#bt').textContent='Probando…';const r=await fetch('/api/backtest?lottery='+encodeURIComponent(l));const j=await r.json();if(!j.tests){$('#bt').innerHTML='<b>'+j.status+'</b>';return;}$('#bt').innerHTML=`Pruebas: ${j.tests}<br>≥1 Top 5: <b>${j.top5_number_hit_pct}%</b><br>2-DE-3: <b>${j.two_of_three_pct}%</b><br>Palé Top 5: <b>${j.top5_pair_hit_pct}%</b><br>Tripleta Top 5: <b>${j.top5_triple_hit_pct}%</b>`;};
+$('#csvBtn').onclick=async()=>{const f=$('#csv').files[0];if(!f){$('#csvOut').textContent='Selecciona un CSV.';return;}const fd=new FormData();fd.set('file',f);const r=await fetch('/api/import-csv',{method:'POST',body:fd});const j=await r.json();$('#csvOut').textContent=`Importados: ${j.inserted}. Errores: ${(j.errors||[]).length}`;await Promise.all([loadNetwork(),loadLotteries()]);await analyze();};
+$('#anBtn').onclick=analyze;$('#lottery').onchange=analyze;
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+Promise.all([loadNetwork(),loadHistory(),loadLotteries(),ranking(),freshness()]).then(analyze);
+</script></main></body></html>

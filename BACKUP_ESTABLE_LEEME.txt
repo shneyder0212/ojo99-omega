@@ -1,0 +1,13 @@
+OJO-99 BACKUP ESTABLE
+======================
+Esta copia corresponde a la versión estable anterior a V9:
+
+- OJO-99 V8.3
+- ESCUDO V1
+- TURBO SEGURO
+- Botón ANALIZAR corregido
+- Fix histórico Anguila 10 AM
+- Ranking + AutoFreeze
+- PostgreSQL/DATABASE_URL no están dentro del ZIP; se conservan en Render.
+
+Usar este paquete como rollback si una futura actualización presenta problemas.

@@ -1,0 +1,30 @@
+OJO-99 V9 + RADAR TOP 20 SAFE
+=============================
+
+CAMBIO NUEVO:
+- Radar Top 20 de números por lotería.
+- Usa el MISMO ranking calibrado que alimenta el Top 5.
+- Zonas:
+  #1-5   FUEGO
+  #6-10  SEGUNDA LINEA
+  #11-20 VIGILANCIA
+- Baselines mostrados:
+  Top 5  ~14.4%
+  Top 10 ~27.3%
+  Top 20 ~49.2%
+
+NO CAMBIA:
+- PostgreSQL
+- DATABASE_URL
+- tablas
+- histórico acumulado
+- Turbo Seguro
+- ESCUDO V1
+- AutoFreeze
+- recolector histórico
+- botón Analizar
+- Top 5 principal
+
+IMPORTANTE:
+El Radar Top 20 solo aparece con 30+ sorteos en memoria para esa lotería.
+No genera números aleatorios y no reemplaza el Top 5.
