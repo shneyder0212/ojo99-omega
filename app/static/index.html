@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07101f">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>OJO-99 Omega V5</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#07101f;color:#f8fafc}
+body{margin:0;background:linear-gradient(180deg,#07101f,#111827);min-height:100vh}
+main{max-width:1100px;margin:auto;padding:18px}
+h1{margin:.3rem 0}.muted{color:#9ca3af}.good{color:#86efac}.warn{color:#fbbf24}.bad{color:#fca5a5}
+.card{background:#121c2d;border:1px solid #26364d;border-radius:18px;padding:16px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+button,select{font:inherit;border-radius:12px;padding:11px;border:1px solid #334155;background:#0f172a;color:white}
+button{background:#1d4ed8;border:none;font-weight:700;cursor:pointer}
+.master{border:2px solid #f59e0b}
+table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #273449}
+.big{font-size:1.4rem;font-weight:800}
+</style>
+</head>
+<body><main>
+<h1>👁️ OJO-99 Omega V5</h1>
+<div class="muted">Red Propia · API propia · memoria central · verificación de fuentes</div>
+
+<div class="card">
+<b class="good">CERO NÚMEROS AL AZAR.</b>
+La app móvil consulta nuestra propia red y nuestra base de datos.
+</div>
+
+<div class="grid">
+ <div class="card">
+   <h3>🌐 Red OJO-99</h3>
+   <div id="network">Consultando…</div><br>
+   <button id="syncBtn">Sincronizar fuentes</button>
+ </div>
+ <div class="card">
+   <h3>🧠 Memoria propia</h3>
+   <div id="history">Consultando…</div><br>
+   <button id="historyBtn">Cargar siguiente día histórico</button>
+ </div>
+</div>
+
+<div class="card">
+<h3>👁️ Estudio</h3>
+<select id="lottery"></select>
+<button id="anBtn">Analizar</button>
+<button id="freezeBtn">Congelar próxima predicción</button>
+<div id="status" class="muted" style="margin-top:10px"></div>
+</div>
+
+<div id="master"></div>
+
+<div class="grid">
+ <div class="card"><h3>🔥 Top 5 números</h3><div id="nums"></div></div>
+ <div class="card"><h3>🧲 Top 5 palés</h3><div id="pairs"></div></div>
+ <div class="card"><h3>🔺 Top 5 tripletas</h3><div id="triples"></div></div>
+ <div class="card"><h3>➡️ Arrastres</h3><div id="trans"></div></div>
+</div>
+
+<div class="grid">
+ <div class="card"><h3>🎯 Rendimiento</h3><div id="perf"></div></div>
+ <div class="card"><h3>🧪 Backtest</h3><button id="btBtn">Probar pasado → futuro</button><div id="bt"></div></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const table=(a,fn)=>!a?.length?'<span class="muted">SIN SEÑAL</span>':'<table>'+a.map(fn).join('')+'</table>';
+
+async function loadNetwork(){
+ const r=await fetch('/api/network/status'); const j=await r.json();
+ $('#network').innerHTML=`
+ Observaciones brutas: <b>${j.raw_observations}</b><br>
+ Resultados canónicos: <b>${j.canonical_results}</b><br>
+ Verificados por consenso: <b>${j.verified_results}</b><br>
+ Conflictos: <b>${j.conflicts}</b><br><br>
+ ${j.sources.map(s=>`${s.state==='HEALTHY'?'🟢':s.state==='PAUSED'?'🔴':'🟡'} ${s.key} · ${s.state}`).join('<br>')}
+ `;
+}
+
+async function loadHistory(){
+ const r=await fetch('/api/network/history-status'); const j=await r.json();
+ $('#history').innerHTML=`
+ Resultados en nuestra red: <b>${j.canonical_results}</b><br>
+ Retrocediendo: <b>${j.cursor_date}</b><br>
+ Objetivo: ${j.target_date}<br>
+ Consultas cacheadas: ${j.cached_requests}
+ `;
+}
+
+async function loadLotteries(){
+ const r=await fetch('/api/lotteries'); const j=await r.json();
+ $('#lottery').innerHTML=j.lotteries.map(x=>`<option value="${x.name}">${x.display} · memoria ${x.draw_count}</option>`).join('');
+}
+
+async function analyze(){
+ const l=$('#lottery').value;if(!l)return;
+ const r=await fetch('/api/analyze?lottery='+encodeURIComponent(l)); const j=await r.json();
+ $('#status').innerHTML=j.draw_count<30?`<b>DATOS INSUFICIENTES</b> · ${j.draw_count} sorteos en nuestra red`:`${j.status} · ${j.draw_count} sorteos`;
+
+ $('#nums').innerHTML=table(j.top_numbers,x=>`<tr><td><b>${x.number}</b></td><td>${x.score}/100</td></tr>`);
+ $('#pairs').innerHTML=table(j.top_pairs,x=>`<tr><td><b>${x.pair.join('–')}</b></td><td>${x.score}/100</td><td>x${x.lift}</td></tr>`);
+ $('#triples').innerHTML=table(j.top_triples,x=>`<tr><td><b>${x.triple.join('–')}</b></td><td>${x.score}/100</td></tr>`);
+ $('#trans').innerHTML=table(j.transitions,x=>`<tr><td>${x.from} → ${x.to}</td><td>${Math.round(x.rate*100)}%</td></tr>`);
+
+ $('#master').innerHTML=j.master_play
+ ? `<div class="card master"><h2>🚨 JUGADA MAESTRA</h2><div class="big">${j.master_play.pair.join(' – ')}</div><p>OJO Score ${j.master_play.score}/100</p><p>${j.master_play.reason}</p></div>`
+ : `<div class="card"><b>👀 OJO-99 VIGILANDO</b><div class="muted">Sin Jugada Maestra.</div></div>`;
+ await perf();
+}
+
+async function perf(){
+ const l=$('#lottery').value;
+ const r=await fetch('/api/performance?lottery='+encodeURIComponent(l)); const j=await r.json();
+ const f=x=>x==null?'—':x+'%';
+ $('#perf').innerHTML=`
+ Estado: <b>${j.sample_status}</b><br>
+ Evaluadas: ${j.evaluated}<br>
+ ≥1 número Top 5: <b>${f(j.top5_numbers)}</b><br>
+ 2-DE-3: <b>${f(j.two_of_three)}</b><br>
+ Palés: <b>${f(j.top5_pairs)}</b><br>
+ Tripletas: <b>${f(j.top5_triples)}</b><br>
+ Jugada Maestra: ${j.master_hits}/${j.master_alerts} (${f(j.master_pct)})
+ `;
+}
+
+$('#syncBtn').onclick=async()=>{
+ $('#network').textContent='Sincronizando…';
+ await fetch('/api/network/sync-now',{method:'POST'});
+ await Promise.all([loadNetwork(),loadLotteries()]);
+ await analyze();
+};
+
+$('#historyBtn').onclick=async()=>{
+ $('#history').textContent='Cargando histórico…';
+ await fetch('/api/network/history-step',{method:'POST'});
+ await Promise.all([loadHistory(),loadNetwork(),loadLotteries()]);
+ await analyze();
+};
+
+$('#freezeBtn').onclick=async()=>{
+ const f=new FormData(); f.set('lottery',$('#lottery').value);
+ const r=await fetch('/api/freeze-next',{method:'POST',body:f}); const j=await r.json();
+ alert(j.ok?'Predicción congelada.':'No congelada: '+j.reason);
+};
+
+$('#btBtn').onclick=async()=>{
+ const l=$('#lottery').value;
+ $('#bt').textContent='Probando…';
+ const r=await fetch('/api/backtest?lottery='+encodeURIComponent(l)); const j=await r.json();
+ if(!j.tests){$('#bt').innerHTML='<b>'+j.status+'</b>';return;}
+ $('#bt').innerHTML=`
+ Pruebas: ${j.tests}<br>
+ ≥1 Top 5: <b>${j.top5_number_hit_pct}%</b><br>
+ 2-DE-3: <b>${j.two_of_three_pct}%</b><br>
+ Palé Top 5: <b>${j.top5_pair_hit_pct}%</b><br>
+ Tripleta Top 5: <b>${j.top5_triple_hit_pct}%</b>
+ `;
+};
+
+$('#anBtn').onclick=analyze;
+$('#lottery').onchange=analyze;
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+
+Promise.all([loadNetwork(),loadHistory(),loadLotteries()]).then(analyze);
+</script>
+</main></body>
+</html>

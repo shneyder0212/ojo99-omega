@@ -1,0 +1,15 @@
+OJO-99 Omega V4.1 Safe Collector
+================================
+- Caché permanente de fechas históricas.
+- No vuelve a pedir fechas COMPLETE/EMPTY.
+- Máximo de 2 días históricos por paso por defecto.
+- Mínimo de 20 segundos entre solicitudes HTTP.
+- Un único recolector simultáneo.
+- Pausa automática en HTTP 403 y 429.
+- Backoff exponencial: 30m, 60m, 120m... hasta 360m.
+- No intenta evadir bloqueos.
+- Estado de salud de fuente visible en la app.
+- Histórico y análisis trabajan desde PostgreSQL.
+- Zona horaria Santo Domingo.
+- Backtesting walk-forward y objetivo 2-DE-3.
+- Cero números al azar.
