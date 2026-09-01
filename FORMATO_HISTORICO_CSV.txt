@@ -1,7 +1,0 @@
-Formato aceptado por /api/import-csv
-
-lottery,draw_time,n1,n2,n3
-Anguilla Mañana,2026-08-31T14:00:00+00:00,12,34,56
-
-Para sorteos de 4, 5 o 20 números, agrega n4, n5... hasta el total requerido.
-draw_time debe ser ISO 8601 con zona horaria.
