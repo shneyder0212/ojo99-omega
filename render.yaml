@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: ojo99-omega
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: COLLECTOR_ENABLED
+        value: "true"
+      - key: CURRENT_SYNC_MINUTES
+        value: "20"
+      - key: HISTORY_SYNC_MINUTES
+        value: "60"
+      - key: SAFE_MIN_SECONDS_BETWEEN_REQUESTS
+        value: "30"
+      - key: SAFE_BACKOFF_BASE_MINUTES
+        value: "60"
+      - key: SAFE_BACKOFF_MAX_MINUTES
+        value: "720"
+      - key: SOURCE_PRIMARY_URL
+        value: "https://loterianacional.com.do/resultados/"
+      - key: SOURCE_SECONDARY_URL
+        sync: false
