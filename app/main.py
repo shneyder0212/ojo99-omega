@@ -40,6 +40,30 @@ SAFE_BACKOFF_MAX_MINUTES = max(SAFE_BACKOFF_BASE_MINUTES, int(os.getenv("SAFE_BA
 SOURCE_PRIMARY_URL = os.getenv("SOURCE_PRIMARY_URL", "https://loterianacional.com.do/resultados/").strip()
 SOURCE_SECONDARY_URL = os.getenv("SOURCE_SECONDARY_URL", "").strip()
 
+# Arquitectura visible y auditable. Estas etiquetas no cambian tablas ni datos:
+# permiten localizar cada responsabilidad sin romper el núcleo histórico V6.
+SYSTEM_LAYERS = [
+    ("C00", "ESCUDO V1"),
+    ("C01", "Fuentes Verificadas"),
+    ("C02", "Limpieza y Normalización"),
+    ("C03", "Control de Conflictos"),
+    ("C04", "Memoria Viva"),
+    ("C05", "Motores de Análisis"),
+    ("C06", "Validación Real"),
+    ("C07", "Puerta Cero Azar"),
+    ("C08", "Predicción"),
+    ("C09", "Auditoría"),
+    ("C10", "Laboratorio Campeón"),
+    ("C11", "Tribunal de Conclusiones"),
+    ("C12", "Top 20 Cobertura Inteligente"),
+    ("C13", "Radar entre Loterías"),
+    ("C14", "Medidor de Ventaja Real"),
+    ("C15", "Predicción Congelada"),
+    ("C16", "Operación 3 de 3"),
+]
+
+ANGUILLA_10AM_CACHE_VERSION = "direct-v900"
+
 # ESCUDO V1 — capa aditiva. El secreto vive SOLO en Render.
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
 MAX_CSV_BYTES = max(1024, int(os.getenv("MAX_CSV_BYTES", "1048576")))
@@ -305,6 +329,26 @@ def parse_spanish_long_date(s):
         return None
 
 
+def parse_public_date(s):
+    """Acepta fecha larga española y las variantes numéricas de la fuente."""
+    parsed = parse_spanish_long_date(s)
+    if parsed:
+        return parsed
+    match = re.search(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b", s)
+    if not match:
+        return None
+    try:
+        return date(int(match.group(3)), int(match.group(2)), int(match.group(1)))
+    except ValueError:
+        return None
+
+
+def is_anguilla_10am_time(s):
+    """Tolera '10:00 AM', '10:00 a. m.' y espacios/capitalización distintos."""
+    compact = re.sub(r"[^0-9A-Z:]", "", str(s).upper())
+    return compact == "10:00AM"
+
+
 def extract_anguilla_manana_history(html):
     """
     Parser dedicado SOLO a Anguilla Mañana 10:00 AM.
@@ -318,14 +362,32 @@ def extract_anguilla_manana_history(html):
     ]
 
     out = []
+
+    # Ruta principal: tabla estructurada de la página individual. Es más estable
+    # que depender del texto completo o del listado general de resultados.
+    for tr in soup.select("table tbody tr"):
+        cells = tr.find_all("td")
+        if len(cells) < 3:
+            continue
+        d = parse_public_date(cells[0].get_text(" ", strip=True))
+        if not d or not is_anguilla_10am_time(cells[1].get_text(" ", strip=True)):
+            continue
+        number_text = cells[2].get_text(" ", strip=True)
+        nums = [int(x) for x in re.findall(r"(?<!\d)(\d{1,2})(?!\d)", number_text)]
+        nums = [x for x in nums if 0 <= x <= 99][:3]
+        if len(nums) == 3:
+            dt = datetime(d.year, d.month, d.day, 10, 0, tzinfo=DR_TZ).astimezone(timezone.utc)
+            out.append(("Anguilla Mañana", dt, nums))
+
+    # Respaldo: formato textual anterior de la misma página.
     for i, line in enumerate(lines):
-        d = parse_spanish_long_date(line)
+        d = parse_public_date(line)
         if not d:
             continue
 
         # Buscar la hora 10:00 AM cerca de la fecha
         window = lines[i:min(i+30, len(lines))]
-        time_s = next((x for x in window if x.strip().upper() == "10:00 AM"), None)
+        time_s = next((x for x in window if is_anguilla_10am_time(x)), None)
         if not time_s:
             continue
 
@@ -334,7 +396,7 @@ def extract_anguilla_manana_history(html):
         nums = []
         for x in window[start_idx:]:
             # Cortar si comienza otra fecha
-            if parse_spanish_long_date(x):
+            if parse_public_date(x):
                 break
             if NUM_RE.match(x):
                 v = int(x)
@@ -598,64 +660,29 @@ def set_cache(db,source_key,day,status,rows_found=0,message=""):
 
 
 
-def fetch_anguilla_manana_from_general(src, day, max_pages=12):
+def fetch_anguilla_manana_history(src, day):
     """
-    V8.2.2 — Anguilla Mañana 10AM
-    Busca el sorteo en el listado GENERAL de resultados, recorriendo páginas.
-    No depende del slug individual.
+    V9.0 — Anguilla Mañana 10AM.
+    Consulta una sola vez la página histórica individual. El listado general no
+    publica siempre este sorteo y recorrer páginas lo dejaba estancado además de
+    consumir peticiones innecesarias.
     """
     label = day.strftime("%d-%m-%Y")
     base = src.url.rstrip("/")
-
-    # SOURCE_PRIMARY_URL normalmente termina en /resultados/
     if "/resultados" not in base:
-        base = base.rstrip("/") + "/resultados"
+        root = base.rstrip("/") + "/resultados"
     else:
-        base = base.split("/resultados")[0].rstrip("/") + "/resultados"
-
-    seen_signatures = set()
-
-    for page in range(1, max_pages + 1):
-        url = f"{base}/?page={page}"
-
-        rows = fetch_source(src, url, expected_game=None)
-
-        # Si el servidor ignora ?page=, detectamos página repetida y paramos.
-        sig = tuple(
-            (g, dt.isoformat(), tuple(nums))
-            for g, dt, nums in rows[:20]
-        )
-        if sig in seen_signatures:
-            break
-        seen_signatures.add(sig)
-
-        matches = [
-            (g, dt, nums)
-            for g, dt, nums in rows
-            if g == "Anguilla Mañana"
-            and dt.astimezone(DR_TZ).date() == day
-        ]
-        if matches:
-            return {
-                "rows": matches,
-                "url": url,
-                "page": page,
-                "requested_date": label
-            }
-
-        # Si la página contiene fechas más antiguas que el día buscado,
-        # ya pasamos la fecha y podemos detenernos.
-        dates = [
-            dt.astimezone(DR_TZ).date()
-            for _, dt, _ in rows
-        ]
-        if dates and min(dates) < day:
-            break
-
+        root = base.split("/resultados")[0].rstrip("/") + "/resultados"
+    url = f"{root}/anguilla-manana/?date={label}"
+    rows = fetch_source(src, url, expected_game="Anguilla Mañana")
+    matches = [
+        (game, dt, nums) for game, dt, nums in rows
+        if game == "Anguilla Mañana" and dt.astimezone(DR_TZ).date() == day
+    ]
     return {
-        "rows": [],
-        "url": f"{base}/",
-        "page": None,
+        "rows": matches,
+        "url": url,
+        "page": 1,
         "requested_date": label
     }
 
@@ -699,7 +726,7 @@ def collect_history_step():
                 # Nueva caché SOLO para Anguilla Mañana, para no reutilizar
                 # los EMPTY generados por el método anterior.
                 cache_key = (
-                    f"{src.key}:{game}:general-v822"
+                    f"{src.key}:{game}:{ANGUILLA_10AM_CACHE_VERSION}"
                     if game == "Anguilla Mañana"
                     else f"{src.key}:{game}"
                 )
@@ -711,7 +738,7 @@ def collect_history_step():
 
                 try:
                     if game == "Anguilla Mañana":
-                        found = fetch_anguilla_manana_from_general(src, day)
+                        found = fetch_anguilla_manana_history(src, day)
                         rows = found["rows"]
                         url = found["url"]
                         page_used = found["page"]
@@ -2335,6 +2362,75 @@ def v9_status():
         "production_history_writes_from_lab":False
     }
 
+
+@app.get("/api/layers/status")
+def layers_status():
+    """Mapa operativo de C00-C16; solo lectura, nunca altera el histórico."""
+    with SessionLocal() as db:
+        sources = db.scalars(select(SourceRegistry).order_by(SourceRegistry.key)).all()
+        source_states = [(s.key, s.state) for s in sources]
+        conflicts = db.scalar(
+            select(func.count(CanonicalDraw.id)).where(
+                CanonicalDraw.verification_state == "CONFLICT"
+            )
+        ) or 0
+        canonical = db.scalar(
+            select(func.count(CanonicalDraw.id)).where(
+                CanonicalDraw.verification_state != "CONFLICT"
+            )
+        ) or 0
+        max_draw_count = db.scalar(
+            select(func.count(CanonicalDraw.id))
+            .where(CanonicalDraw.verification_state != "CONFLICT")
+            .group_by(CanonicalDraw.lottery)
+            .order_by(func.count(CanonicalDraw.id).desc())
+            .limit(1)
+        ) or 0
+        validated = db.scalar(
+            select(func.count(ModelValidation.id)).where(ModelValidation.tests > 0)
+        ) or 0
+        evaluated = db.scalar(
+            select(func.count(Prediction.id)).where(Prediction.evaluated == True)
+        ) or 0
+        frozen = db.scalar(select(func.count(Prediction.id))) or 0
+        cur = ensure_cursor(db)
+
+    unhealthy = [key for key, state in source_states if state not in ("HEALTHY",)]
+
+    def item(code, status, detail):
+        name = dict(SYSTEM_LAYERS)[code]
+        return {"code": code, "name": name, "status": status, "detail": detail}
+
+    layers = [
+        item("C00", "OK", f"Pausa segura mínima {SAFE_MIN_SECONDS_BETWEEN_REQUESTS}s"),
+        item("C01", "ATENCION" if unhealthy else "OK",
+             "Fuentes con pausa: " + ", ".join(unhealthy) if unhealthy else "Fuentes operativas"),
+        item("C02", "OK", "Normalizadores y deduplicación activos"),
+        item("C03", "ATENCION" if conflicts else "OK", f"{int(conflicts)} conflictos aislados"),
+        item("C04", "OK" if cur.finished else "CARGANDO",
+             f"{int(canonical)} resultados · cursor {cur.cursor_date}"),
+        item("C05", "OK" if max_draw_count >= 30 else "ESPERANDO_DATOS",
+             f"Máxima memoria por lotería: {int(max_draw_count)}"),
+        item("C06", "OK" if validated else "ESPERANDO_DATOS", f"{int(validated)} validaciones"),
+        item("C07", "OK", "Cero números aleatorios"),
+        item("C08", "OK" if max_draw_count >= 30 else "ESPERANDO_DATOS", "Top 5 sujeto a puerta de datos"),
+        item("C09", "OK" if evaluated else "ESPERANDO_DATOS", f"{int(evaluated)} predicciones evaluadas"),
+        item("C10", "OK", V9_NAME),
+        item("C11", "OK", "Conclusión sometida a calidad, muestra y consenso"),
+        item("C12", "OK" if max_draw_count >= 30 else "ESPERANDO_DATOS", "Top 20 sin relleno aleatorio"),
+        item("C13", "EN_ESTUDIO", "Relaciones solo si superan validación cronológica"),
+        item("C14", "OK" if evaluated else "ESPERANDO_DATOS", "Ventaja pendiente de muestra real"),
+        item("C15", "OK", f"{int(frozen)} predicciones congeladas"),
+        item("C16", "OK" if max_draw_count >= 300 else "PREPARANDO_DATOS",
+             f"Operación 3 de 3 requiere 300+; máximo actual {int(max_draw_count)}"),
+    ]
+    return {
+        "architecture": "OJO-99 C00-C16",
+        "database_schema_changed": False,
+        "history_preserved": True,
+        "layers": layers,
+    }
+
 @app.get("/api/network/status")
 def network_status():
     with SessionLocal() as db:
@@ -2481,8 +2577,28 @@ def history_status():
     with SessionLocal() as db:
         cur=ensure_cursor(db); cached=db.scalar(select(func.count(DateCache.id))) or 0
         canon=db.scalar(select(func.count(CanonicalDraw.id)).where(CanonicalDraw.verification_state!="CONFLICT")) or 0
+        ang_count=db.scalar(select(func.count(CanonicalDraw.id)).where(
+            CanonicalDraw.lottery=="Anguilla Mañana",
+            CanonicalDraw.verification_state!="CONFLICT"
+        )) or 0
+        ang_latest=db.scalar(select(func.max(CanonicalDraw.draw_time)).where(
+            CanonicalDraw.lottery=="Anguilla Mañana",
+            CanonicalDraw.verification_state!="CONFLICT"
+        ))
+        ang_errors=db.scalar(select(func.count(DateCache.id)).where(
+            DateCache.source_key.like(f"%Anguilla Mañana:{ANGUILLA_10AM_CACHE_VERSION}%"),
+            DateCache.status=="ERROR"
+        )) or 0
     return {"cursor_date":cur.cursor_date,"target_date":cur.target_date,"finished":cur.finished,
-            "cached_requests":int(cached),"canonical_results":int(canon)}
+            "cached_requests":int(cached),"canonical_results":int(canon),
+            "anguila_10am":{
+                "status":"RECUPERANDO" if not cur.finished and ang_count < 30 else "OPERATIVA",
+                "draw_count":int(ang_count),
+                "latest_draw":ang_latest,
+                "parser_version":ANGUILLA_10AM_CACHE_VERSION,
+                "errors":int(ang_errors),
+                "history_preserved":True
+            }}
 
 
 @app.post("/api/import-csv")

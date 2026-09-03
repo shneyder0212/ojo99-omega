@@ -13,12 +13,24 @@ main{max-width:1100px;margin:auto;padding:18px}.muted{color:#9ca3af}.good{color:
 button,select,input{font:inherit;border-radius:12px;padding:11px;border:1px solid #334155;background:#0f172a;color:white}
 button{background:#1d4ed8;border:none;font-weight:700;cursor:pointer}.master{border:2px solid #f59e0b}
 table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #273449}.big{font-size:1.4rem;font-weight:800}
+.layer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-top:10px}
+.layer{background:#0f172a;border:1px solid #26364d;border-radius:12px;padding:10px;min-height:66px}
+.layer-code{display:inline-block;color:#93c5fd;font-weight:900;margin-right:6px}.layer-name{font-weight:750}
+.layer-detail{display:block;color:#9ca3af;font-size:.82rem;margin-top:5px;line-height:1.25}
+.layer.OK{border-color:#166534}.layer.ATENCION{border-color:#b45309}.layer.CARGANDO,.layer.PREPARANDO_DATOS{border-color:#1d4ed8}
+@media(max-width:600px){main{padding:10px}.card{padding:13px}.layer-grid{grid-template-columns:1fr 1fr}.layer{padding:9px}.layer-detail{font-size:.76rem}}
 </style></head>
 <body><main>
 <h1>👁️ OJO-99 V9 Supreme Lab</h1>
 <div class="muted">ARENA · ADN · Régimen Semanal · Consejo · Kino A/B · Auditoría</div>
 
 <div class="card"><b class="good">CERO NÚMEROS AL AZAR.</b> Si una fuente se bloquea, OJO-99 sigue trabajando con su memoria guardada.</div>
+
+<div class="card">
+<h3>🧭 Arquitectura OJO-99 · Capas C00–C16</h3>
+<div class="muted">Cada función tiene número y nombre para localizar cualquier incidencia sin tocar el historial.</div>
+<div id="layers" class="layer-grid"><span class="muted">Comprobando capas…</span></div>
+</div>
 
 <div class="grid">
 <div class="card"><h3>🛡️ Núcleo independiente</h3><div id="network">Consultando…</div><br><button id="syncBtn">Sincronizar fuentes</button></div>
@@ -86,7 +98,14 @@ async function loadNetwork(){
 }
 async function loadHistory(){
  const r=await fetch('/api/network/history-status');const j=await r.json();
- $('#history').innerHTML=`Resultados: <b>${j.canonical_results}</b><br>Retrocediendo: <b>${j.cursor_date}</b><br>Objetivo: ${j.target_date}<br>Caché: ${j.cached_requests}`;
+ const a=j.anguila_10am||{};
+ const latest=a.latest_draw?new Date(a.latest_draw).toLocaleDateString('es-ES'):'—';
+ $('#history').innerHTML=`Resultados: <b>${j.canonical_results}</b><br>Retrocediendo: <b>${j.cursor_date}</b><br>Objetivo: ${j.target_date}<br>Caché: ${j.cached_requests}<br><br>👁️ <b>Anguila 10 AM:</b> ${a.status||'REVISANDO'} · memoria <b>${a.draw_count??0}</b><br><small>Último: ${latest} · lector ${a.parser_version||'—'} · historial preservado</small>`;
+}
+async function loadLayers(){
+ const r=await fetch('/api/layers/status');const j=await r.json();
+ const icon=s=>s==='OK'?'🟢':s==='ATENCION'?'🟡':s==='EN_ESTUDIO'?'🧪':s==='CARGANDO'?'🔵':'⚪';
+ $('#layers').innerHTML=(j.layers||[]).map(x=>`<div class="layer ${x.status}"><span class="layer-code">${x.code}</span><span class="layer-name">${icon(x.status)} ${x.name}</span><span class="layer-detail">${x.detail}</span></div>`).join('');
 }
 async function loadLotteries(){
  const r=await fetch('/api/lotteries');const j=await r.json();
@@ -319,12 +338,12 @@ async function perf(){
  const l=$('#lottery').value;const r=await fetch('/api/performance?lottery='+encodeURIComponent(l));const j=await r.json();const f=x=>x==null?'—':x+'%';
  $('#perf').innerHTML=`Estado: <b>${j.sample_status}</b><br>Evaluadas: ${j.evaluated}<br>≥1 Top 5: <b>${f(j.top5_numbers)}</b><br>2-DE-3: <b>${f(j.two_of_three)}</b><br>Palés: <b>${f(j.top5_pairs)}</b><br>Tripletas: <b>${f(j.top5_triples)}</b><br>Maestra: ${j.master_hits}/${j.master_alerts} (${f(j.master_pct)})`;
 }
-$('#syncBtn').onclick=async()=>{await fetch('/api/network/sync-now',{method:'POST'});await Promise.all([loadNetwork(),loadLotteries()]);await analyze();};
-$('#historyBtn').onclick=async()=>{await fetch('/api/network/history-step',{method:'POST'});await Promise.all([loadHistory(),loadNetwork(),loadLotteries()]);await analyze();};
+$('#syncBtn').onclick=async()=>{await fetch('/api/network/sync-now',{method:'POST'});await Promise.all([loadNetwork(),loadLotteries(),loadLayers()]);await analyze();};
+$('#historyBtn').onclick=async()=>{await fetch('/api/network/history-step',{method:'POST'});await Promise.all([loadHistory(),loadNetwork(),loadLotteries(),loadLayers()]);await analyze();};
 $('#freezeBtn').onclick=async()=>{const f=new FormData();f.set('lottery',$('#lottery').value);const r=await fetch('/api/freeze-next',{method:'POST',body:f});const j=await r.json();alert(j.ok?'Predicción congelada.':'No congelada: '+j.reason);};
 $('#btBtn').onclick=async()=>{const l=$('#lottery').value;$('#bt').textContent='Probando…';const r=await fetch('/api/backtest?lottery='+encodeURIComponent(l));const j=await r.json();if(!j.tests){$('#bt').innerHTML='<b>'+j.status+'</b>';return;}$('#bt').innerHTML=`Pruebas: ${j.tests}<br>≥1 Top 5: <b>${j.top5_number_hit_pct}%</b><br>2-DE-3: <b>${j.two_of_three_pct}%</b><br>Palé Top 5: <b>${j.top5_pair_hit_pct}%</b><br>Tripleta Top 5: <b>${j.top5_triple_hit_pct}%</b>`;};
 $('#csvBtn').onclick=async()=>{const f=$('#csv').files[0];if(!f){$('#csvOut').textContent='Selecciona un CSV.';return;}const fd=new FormData();fd.set('file',f);const r=await fetch('/api/import-csv',{method:'POST',body:fd});const j=await r.json();$('#csvOut').textContent=`Importados: ${j.inserted}. Errores: ${(j.errors||[]).length}`;await Promise.all([loadNetwork(),loadLotteries()]);await analyze();};
 $('#anBtn').onclick=analyze;$('#lottery').onchange=analyze;
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
-Promise.all([loadNetwork(),loadHistory(),loadLotteries(),ranking(),freshness()]).then(analyze);
+Promise.all([loadNetwork(),loadHistory(),loadLotteries(),ranking(),freshness(),loadLayers()]).then(analyze);
 </script></main></body></html>

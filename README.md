@@ -56,3 +56,11 @@ V8 agrega Top 5 + Más Fuego para números, palés y tripletas; ADN de candidato
 régimen semanal, presión por decenas, fechas especiales, Consejo de Generales
 y dos jugadas Kino A/B. Todas las recomendaciones siguen la regla absoluta:
 cero números al azar y ninguna señal fuerte sin validación.
+
+## Arquitectura C00-C16 y reparación Anguila 10 AM
+
+- El panel `/api/layers/status` identifica cada responsabilidad desde C00 ESCUDO V1 hasta C16 Operación 3 de 3.
+- La estructura es aditiva: conserva `DATABASE_URL`, todas las tablas V6, cursores, caché y predicciones.
+- Anguila 10 AM consulta su página histórica individual con una petición por fecha.
+- La caché `direct-v900` recupera fechas que el lector antiguo marcó vacías sin borrar registros anteriores.
+- `/api/network/history-status` muestra el avance específico de Anguila 10 AM.

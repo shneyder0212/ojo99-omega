@@ -1,0 +1,26 @@
+OJO-99 — ESTRUCTURA C00-C16 + OJO ANGUILA 10 AM
+=================================================
+
+Protección del historial
+------------------------
+- No se elimina, reinicia ni renombra ninguna tabla V6.
+- DATABASE_URL continúa siendo la misma variable de Render.
+- Base.metadata.create_all() solo crea tablas ausentes; no borra registros.
+- Los conflictos continúan aislados y no pasan al análisis.
+
+Capas visibles
+--------------
+- Panel C00-C16 con número, nombre, estado y diagnóstico.
+- Endpoint de solo lectura: /api/layers/status.
+- C16 Operación 3 de 3 queda preparando datos hasta alcanzar una muestra prudente.
+
+Anguila 10:00 AM
+----------------
+- Causa corregida: el listado general no siempre incluye Anguilla Mañana.
+- Ahora se consulta directamente /resultados/anguilla-manana/?date=DD-MM-AAAA.
+- Se realiza una sola consulta por fecha, respetando ESCUDO V1 y el backoff.
+- El lector acepta fecha larga o numérica y variantes visuales de “10:00 AM”.
+- Se usa caché direct-v900, sin borrar la caché ni el histórico anteriores.
+- /api/network/history-status informa memoria, último sorteo y errores de Anguila 10 AM.
+
+CERO NÚMEROS AL AZAR permanece como regla absoluta.
