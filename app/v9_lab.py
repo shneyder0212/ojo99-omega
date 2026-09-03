@@ -1,3 +1,4 @@
+from app import kino_recovery  # sidecar aislado: recupera histórico Kino sin tocar el recolector principal
 
 from math import comb
 
