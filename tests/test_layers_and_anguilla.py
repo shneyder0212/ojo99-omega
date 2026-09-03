@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -41,6 +41,24 @@ class AnguillaParserTests(unittest.TestCase):
         with patch.object(main, "fetch_source", return_value=parsed) as fetch:
             result = main.fetch_anguilla_manana_history(source, date(2026, 9, 2))
         self.assertEqual(result["rows"][0][2], [26, 80, 79])
+        fetch.assert_called_once_with(
+            source,
+            "https://example.test/resultados/anguilla-manana/?date=02-09-2026",
+            expected_game="Anguilla Mañana",
+        )
+
+    def test_recent_sync_uses_yesterday_before_draw_and_ingests_all_rows(self):
+        source = type("Source", (), {
+            "key": "primary",
+            "url": "https://example.test/resultados/",
+            "pause_until": None,
+        })()
+        parsed = main.extract_anguilla_manana_history(ANGUILLA_HTML)
+        before_draw = datetime(2026, 9, 3, 9, 0, tzinfo=main.DR_TZ)
+        with patch.object(main, "fetch_source", return_value=parsed) as fetch:
+            result = main.sync_anguilla_manana_recent(source, now=before_draw)
+        self.assertEqual(result["target_date"], "2026-09-02")
+        self.assertEqual(result["rows"], 2)
         fetch.assert_called_once_with(
             source,
             "https://example.test/resultados/anguilla-manana/?date=02-09-2026",

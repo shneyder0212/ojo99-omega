@@ -63,6 +63,8 @@ SYSTEM_LAYERS = [
 ]
 
 ANGUILLA_10AM_CACHE_VERSION = "direct-v900"
+ANGUILLA_10AM_RECENT_CACHE_VERSION = "recent-v901"
+ANGUILLA_10AM_RETRY_MINUTES = 120
 
 # ESCUDO V1 — capa aditiva. El secreto vive SOLO en Render.
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
@@ -634,6 +636,8 @@ def collect_current():
                     for game,dt in touched: rebuild_canonical(db,game,dt)
                     db.commit()
                 summary.append({"source":src.key,"status":"OK","new":new,"rows":len(rows)})
+                if src.key == "primary":
+                    summary.append(sync_anguilla_manana_recent(src))
             except Exception as e:
                 summary.append({"source":src.key,"status":"ERROR","message":str(e)[:160]})
         return {"status":"OK","sources":summary}
@@ -684,6 +688,88 @@ def fetch_anguilla_manana_history(src, day):
         "url": url,
         "page": 1,
         "requested_date": label
+    }
+
+
+def sync_anguilla_manana_recent(src, now=None):
+    """Sincroniza hasta 10 resultados recientes de Anguila 10 AM con 1 petición.
+
+    Antes de las 10:30 RD consulta el día anterior. Después, consulta el día
+    actual. Una respuesta completa queda cacheada por fecha; si el resultado
+    aún no fue publicado, espera dos horas antes de reintentar. Así se cubre el
+    hueco reciente sin recorrer páginas ni acelerar la fuente.
+    """
+    now = now or datetime.now(DR_TZ)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=DR_TZ)
+    local_now = now.astimezone(DR_TZ)
+    target_day = local_now.date()
+    if (local_now.hour, local_now.minute) < (10, 30):
+        target_day -= timedelta(days=1)
+
+    cache_key = f"{src.key}:Anguilla Mañana:{ANGUILLA_10AM_RECENT_CACHE_VERSION}"
+    with SessionLocal() as db:
+        cached = get_cache(db, cache_key, target_day)
+        if cached and cached.status == "COMPLETE":
+            return {
+                "source": cache_key,
+                "status": "CACHED",
+                "rows": int(cached.rows_found or 0),
+                "new": 0,
+            }
+        if cached and cached.status == "WAITING" and cached.checked_at:
+            checked = cached.checked_at
+            if checked.tzinfo is None:
+                checked = checked.replace(tzinfo=timezone.utc)
+            if checked > datetime.now(timezone.utc) - timedelta(minutes=ANGUILLA_10AM_RETRY_MINUTES):
+                return {
+                    "source": cache_key,
+                    "status": "WAITING",
+                    "rows": int(cached.rows_found or 0),
+                    "new": 0,
+                }
+
+    label = target_day.strftime("%d-%m-%Y")
+    base = src.url.rstrip("/")
+    root = (
+        base.rstrip("/") + "/resultados"
+        if "/resultados" not in base
+        else base.split("/resultados")[0].rstrip("/") + "/resultados"
+    )
+    url = f"{root}/anguilla-manana/?date={label}"
+    rows = fetch_source(src, url, expected_game="Anguilla Mañana")
+    rows = [
+        (game, dt, nums) for game, dt, nums in rows
+        if game == "Anguilla Mañana"
+        and target_day - timedelta(days=45) <= dt.astimezone(DR_TZ).date() <= target_day
+    ]
+    has_target = any(dt.astimezone(DR_TZ).date() == target_day for _, dt, _ in rows)
+
+    touched = set()
+    new = 0
+    with SessionLocal() as db:
+        for game, dt, nums in rows:
+            if ingest_observation(db, src.key, game, dt, nums, url):
+                new += 1
+            touched.add((game, dt))
+        for game, dt in touched:
+            rebuild_canonical(db, game, dt)
+        db.commit()
+        set_cache(
+            db,
+            cache_key,
+            target_day,
+            "COMPLETE" if has_target else "WAITING",
+            len(rows),
+            f"recent-safe; date={label}; rows={len(rows)}; new={new}; target={has_target}",
+        )
+
+    return {
+        "source": cache_key,
+        "status": "OK" if has_target else "WAITING",
+        "rows": len(rows),
+        "new": new,
+        "target_date": target_day.isoformat(),
     }
 
 
