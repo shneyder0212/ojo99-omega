@@ -58,6 +58,12 @@ table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid
 <div id="radar20Box">Esperando análisis…</div>
 </div>
 
+<div class="card">
+<h3>🎯 C16 · Operación 3 de 3</h3>
+<div class="muted">Competencia independiente para cubrir los tres resultados dentro del Top 20.</div>
+<div id="operation3Box">Esperando análisis…</div>
+</div>
+
 <div class="card"><h3>🔥 Top 5 números</h3><div id="nums"></div></div>
 <div class="card"><h3>🧲 Top 5 palés</h3><div id="pairs"></div></div>
 <div class="card"><h3>🔺 Top 5 tripletas</h3><div id="triples"></div></div>
@@ -155,6 +161,15 @@ async function analyze(){
    }
    const j=await r.json();
    const r20=j.radar_top20||{};
+   const op3=r20.operation_3of3||{};
+   const champ=op3.champion||{};
+   $('#operation3Box').innerHTML=
+     `<b>Estado: ${op3.status||'PREPARANDO_DATOS'}</b><br>
+      Memoria: ${op3.draw_count??0}/${op3.required_draws??300} · Pruebas: ${op3.tests??0}<br>
+      Campeón: ${champ.strategy||'—'}<br>
+      3/3 reales: ${champ.three_of_three??0} (${champ.three_of_three_pct??0}%) ·
+      referencia: ${op3.baseline_exact_3of3_pct??0.8}%<br>
+      <small>${op3.message||'Esperando memoria suficiente.'} · Cero números aleatorios.</small>`;
    if(r20.status==='OK'){
      const rows=(r20.numbers||[]).map(x=>{
        const icon=x.rank<=5?'🔥':x.rank<=10?'🟠':'🟡';

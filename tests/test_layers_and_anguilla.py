@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import date, datetime
+from types import SimpleNamespace
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -72,6 +73,21 @@ class LayerMapTests(unittest.TestCase):
         self.assertEqual([code for code, _ in main.SYSTEM_LAYERS], [f"C{i:02d}" for i in range(17)])
         self.assertEqual(dict(main.SYSTEM_LAYERS)["C00"], "ESCUDO V1")
         self.assertEqual(dict(main.SYSTEM_LAYERS)["C16"], "Operación 3 de 3")
+
+    def test_c16_is_deterministic_and_blocks_publication_without_300_draws(self):
+        draws = []
+        for i in range(100):
+            dt = datetime(2026, 1, 1, tzinfo=main.timezone.utc) + main.timedelta(days=i)
+            nums = [i % 100, (i * 3 + 7) % 100, (i * 7 + 11) % 100]
+            draws.append(SimpleNamespace(draw_time=dt, numbers_json=main.json.dumps(nums)))
+        first = main.build_operation_3of3("Anguilla Mañana", draws, max_tests=40)
+        main._c16_cache.clear()
+        second = main.build_operation_3of3("Anguilla Mañana", draws, max_tests=40)
+        self.assertEqual(first, second)
+        self.assertEqual(first["status"], "PREPARANDO_DATOS")
+        self.assertEqual(first["top20"], [])
+        self.assertFalse(first["random_numbers"])
+        self.assertEqual(len(first["strategies"]), 4)
 
 
 if __name__ == "__main__":

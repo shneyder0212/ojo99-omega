@@ -2538,6 +2538,194 @@ def lotteries():
 
 
 
+_c16_cache = {}
+_c16_cache_lock = threading.Lock()
+
+
+def _c16_ranked_strategies(draws):
+    """Cuatro estrategias deterministas; ninguna usa números aleatorios."""
+    if len(draws) < 30:
+        return {}
+
+    long_counts = Counter(n for d in draws for n in nums_of(d))
+    mid_counts = Counter(n for d in draws[-min(120, len(draws)):] for n in nums_of(d))
+    short_counts = Counter(n for d in draws[-min(45, len(draws)):] for n in nums_of(d))
+
+    def normalized(counter):
+        maximum = max(counter.values(), default=0)
+        return {n: (counter[n] / maximum if maximum else 0.0) for n in range(100)}
+
+    nl, nm, ns = normalized(long_counts), normalized(mid_counts), normalized(short_counts)
+    regime = regime_weights(draws)
+    balanced = {
+        n: regime["long"] * nl[n] + regime["mid"] * nm[n] + regime["short"] * ns[n]
+        for n in range(100)
+    }
+
+    pair_counts = Counter()
+    presence = Counter()
+    for d in draws:
+        values = sorted(set(nums_of(d)))
+        presence.update(values)
+        for i in range(len(values)):
+            for j in range(i + 1, len(values)):
+                pair_counts[(values[i], values[j])] += 1
+
+    def ordered(score_map):
+        return [n for n, _ in sorted(score_map.items(), key=lambda item: (-item[1], item[0]))[:20]]
+
+    remaining = set(range(100))
+    diversified = []
+    decades, endings = Counter(), Counter()
+    while remaining and len(diversified) < 20:
+        best = max(
+            remaining,
+            key=lambda n: (
+                balanced[n] - 0.055 * decades[n // 10] - 0.035 * endings[n % 10],
+                -n,
+            ),
+        )
+        diversified.append(best)
+        remaining.remove(best)
+        decades[best // 10] += 1
+        endings[best % 10] += 1
+
+    affinity = []
+    remaining = set(range(100))
+    while remaining and len(affinity) < 20:
+        def affinity_score(n):
+            links = []
+            for chosen in affinity:
+                pair = tuple(sorted((n, chosen)))
+                denom = max(1, min(presence[n], presence[chosen]))
+                links.append(pair_counts[pair] / denom)
+            return balanced[n] + 0.16 * max(links, default=0.0)
+
+        best = max(remaining, key=lambda n: (affinity_score(n), -n))
+        affinity.append(best)
+        remaining.remove(best)
+
+    return {
+        "balance_multi_ventana": ordered(balanced),
+        "frecuencia_larga": ordered(nl),
+        "cobertura_diversificada": diversified,
+        "afinidad_conjunta": affinity,
+    }
+
+
+def build_operation_3of3(lottery, draws, max_tests=300):
+    """C16: valida Top 20 pasado→futuro y optimiza el objetivo exacto 3/3."""
+    draw_count = len(draws)
+    cache_key = (
+        lottery,
+        draw_count,
+        draws[-1].draw_time.isoformat() if draws else "none",
+        int(max_tests),
+    )
+    with _c16_cache_lock:
+        cached = _c16_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    base = {
+        "layer": "C16",
+        "name": "Operación 3 de 3",
+        "draw_count": draw_count,
+        "required_draws": 300,
+        "baseline_exact_3of3_pct": 0.8,
+        "random_numbers": False,
+        "top20": [],
+        "champion": None,
+        "strategies": [],
+    }
+    if draw_count < 90:
+        base.update({
+            "status": "PREPARANDO_DATOS",
+            "message": f"Faltan {max(0, 300-draw_count)} sorteos para la puerta operativa.",
+            "tests": 0,
+        })
+        with _c16_cache_lock:
+            _c16_cache[cache_key] = base
+        return base
+
+    start = max(60, draw_count - max_tests)
+    stats = {}
+    for idx in range(start, draw_count):
+        strategies = _c16_ranked_strategies(draws[:idx])
+        target = set(nums_of(draws[idx]))
+        for name, numbers in strategies.items():
+            row = stats.setdefault(name, {"tests": 0, "hits": [0, 0, 0, 0], "covered": 0})
+            covered = min(3, len(target.intersection(numbers)))
+            row["tests"] += 1
+            row["hits"][covered] += 1
+            row["covered"] += covered
+
+    reports = []
+    for name, row in stats.items():
+        tests = row["tests"]
+        exact = row["hits"][3]
+        rate = exact / tests if tests else 0.0
+        reports.append({
+            "strategy": name,
+            "tests": tests,
+            "zero_of_three": row["hits"][0],
+            "one_of_three": row["hits"][1],
+            "two_of_three": row["hits"][2],
+            "three_of_three": exact,
+            "three_of_three_pct": round(rate * 100, 3),
+            "three_of_three_lower_pct": round(wilson_lower(exact, tests) * 100, 3),
+            "average_covered": round(row["covered"] / tests, 3) if tests else 0.0,
+            "lift_vs_baseline": round(rate / 0.008, 3) if tests else 0.0,
+        })
+
+    reports.sort(
+        key=lambda row: (
+            row["three_of_three_lower_pct"],
+            row["three_of_three_pct"],
+            row["average_covered"],
+        ),
+        reverse=True,
+    )
+    champion = reports[0] if reports else None
+    tests = champion["tests"] if champion else 0
+    current = _c16_ranked_strategies(draws)
+
+    if draw_count < 300:
+        status = "PREPARANDO_DATOS"
+        message = f"Validando sin publicar: faltan {300-draw_count} sorteos."
+    elif tests < 180:
+        status = "PRUEBAS_INSUFICIENTES"
+        message = "Se requieren al menos 180 predicciones cronológicas evaluadas."
+    elif champion["three_of_three_lower_pct"] <= 0.8:
+        status = "SIN_VENTAJA_CONFIRMADA"
+        message = "El campeón todavía no supera la referencia con margen conservador."
+    else:
+        status = "OPERATIVO"
+        message = "Campeón habilitado por la puerta C16."
+        base["top20"] = [f"{n:02d}" for n in current.get(champion["strategy"], [])]
+
+    base.update({
+        "status": status,
+        "message": message,
+        "tests": tests,
+        "champion": champion,
+        "strategies": reports,
+    })
+    with _c16_cache_lock:
+        _c16_cache.clear()
+        _c16_cache[cache_key] = base
+    return base
+
+
+@app.get("/api/operation-3of3")
+def api_operation_3of3(lottery: str):
+    if lottery not in SCHEDULE_MAP:
+        raise HTTPException(404, "Lotería no registrada.")
+    with SessionLocal() as db:
+        draws = canonical_draws(db, lottery)
+    return build_operation_3of3(lottery, draws)
+
+
 def build_top20_radar(lottery, draws):
     """
     READ-ONLY Radar Top 20.
@@ -2553,7 +2741,8 @@ def build_top20_radar(lottery, draws):
                 "top5": [],
                 "top10": [],
                 "top20": []
-            }
+            },
+            "operation_3of3": build_operation_3of3(lottery, draws),
         }
 
     ranked, validations, detail = calibrated_number_rank(lottery, draws)
@@ -2584,7 +2773,8 @@ def build_top20_radar(lottery, draws):
             "top10": 27.291,
             "top20": 49.192
         },
-        "note": "Top 20 proviene del mismo ranking; no reemplaza el Top 5 principal."
+        "note": "Top 20 proviene del mismo ranking; no reemplaza el Top 5 principal.",
+        "operation_3of3": build_operation_3of3(lottery, draws),
     }
 
 
