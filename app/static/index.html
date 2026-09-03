@@ -105,8 +105,10 @@ async function loadNetwork(){
 async function loadHistory(){
  const r=await fetch('/api/network/history-status');const j=await r.json();
  const a=j.anguila_10am||{};
+ const k=j.super_kino_tv||{};
  const latest=a.latest_draw?new Date(a.latest_draw).toLocaleDateString('es-ES'):'—';
- $('#history').innerHTML=`Resultados: <b>${j.canonical_results}</b><br>Retrocediendo: <b>${j.cursor_date}</b><br>Objetivo: ${j.target_date}<br>Caché: ${j.cached_requests}<br><br>👁️ <b>Anguila 10 AM:</b> ${a.status||'REVISANDO'} · memoria <b>${a.draw_count??0}</b><br><small>Último: ${latest} · lector ${a.parser_version||'—'} · historial preservado</small>`;
+ const kinoLatest=k.latest_draw?new Date(k.latest_draw).toLocaleDateString('es-ES'):'—';
+ $('#history').innerHTML=`Resultados: <b>${j.canonical_results}</b><br>Retrocediendo: <b>${j.cursor_date}</b><br>Objetivo: ${j.target_date}<br>Caché: ${j.cached_requests}<br><br>👁️ <b>Anguila 10 AM:</b> ${a.status||'REVISANDO'} · memoria <b>${a.draw_count??0}</b><br><small>Último: ${latest} · lector ${a.parser_version||'—'} · historial preservado</small><br><br>🎯 <b>Super Kino TV:</b> ${k.status||'REVISANDO'} · memoria <b>${k.draw_count??0}</b><br><small>Último: ${kinoLatest} · lector ${k.parser_version||'—'} · 20 números completos por sorteo</small>`;
 }
 async function loadLayers(){
  const r=await fetch('/api/layers/status');const j=await r.json();

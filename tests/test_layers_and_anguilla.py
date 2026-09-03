@@ -27,6 +27,19 @@ ANGUILLA_HTML = """
 </body></html>
 """
 
+KINO_HTML = """
+<html><body><table><tbody>
+  <tr>
+    <td>jueves 11 de junio de 2026</td><td>8:55 PM</td>
+    <td>01 02 09 14 17 18 20 23 31 32 34 38 40 42 46 53 58 60 64 77</td>
+  </tr>
+  <tr>
+    <td>10/06/2026</td><td>8:55 p. m.</td>
+    <td>03 16 20 23 30 34 37 39 40 41 46 50 51 52 57 60 63 70 77</td>
+  </tr>
+</tbody></table></body></html>
+"""
+
 
 class AnguillaParserTests(unittest.TestCase):
     def test_parser_accepts_long_numeric_dates_and_time_variants(self):
@@ -88,6 +101,27 @@ class LayerMapTests(unittest.TestCase):
         self.assertEqual(first["top20"], [])
         self.assertFalse(first["random_numbers"])
         self.assertEqual(len(first["strategies"]), 4)
+
+
+class SuperKinoParserTests(unittest.TestCase):
+    def test_kino_accepts_long_date_and_only_complete_20_number_rows(self):
+        rows = main.extract_super_kino_history(KINO_HTML)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "Super Kino TV")
+        self.assertEqual(len(rows[0][2]), 20)
+        self.assertEqual(rows[0][2][:3], [1, 2, 9])
+
+    def test_kino_history_uses_one_direct_request(self):
+        source = type("Source", (), {"url": "https://example.test/resultados/"})()
+        parsed = main.extract_super_kino_history(KINO_HTML)
+        with patch.object(main, "fetch_source", return_value=parsed) as fetch:
+            result = main.fetch_super_kino_history(source, date(2026, 6, 11))
+        self.assertEqual(len(result["rows"]), 1)
+        fetch.assert_called_once_with(
+            source,
+            "https://example.test/resultados/super-kino-tv/?date=11-06-2026",
+            expected_game="Super Kino TV",
+        )
 
 
 if __name__ == "__main__":

@@ -65,6 +65,9 @@ SYSTEM_LAYERS = [
 ANGUILLA_10AM_CACHE_VERSION = "direct-v900"
 ANGUILLA_10AM_RECENT_CACHE_VERSION = "recent-v901"
 ANGUILLA_10AM_RETRY_MINUTES = 120
+SUPER_KINO_CACHE_VERSION = "direct-v901"
+SUPER_KINO_RECENT_CACHE_VERSION = "recent-v901"
+SUPER_KINO_RETRY_MINUTES = 120
 
 # ESCUDO V1 — capa aditiva. El secreto vive SOLO en Render.
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
@@ -430,6 +433,43 @@ def extract_anguilla_manana_history(html):
     return clean
 
 
+def is_super_kino_time(s):
+    """Tolera 8:55 PM, 8:55 p. m. y 20:55 para Super Kino TV."""
+    compact = re.sub(r"[^0-9A-Z:]", "", str(s).upper())
+    return compact in ("8:55PM", "20:55")
+
+
+def extract_super_kino_history(html):
+    """Parser exclusivo de Super Kino: solo acepta filas completas de 20."""
+    soup = BeautifulSoup(html, "html.parser")
+    out = []
+    for tr in soup.select("table tbody tr"):
+        cells = tr.find_all("td")
+        if len(cells) < 3:
+            continue
+        draw_day = parse_public_date(cells[0].get_text(" ", strip=True))
+        if not draw_day or not is_super_kino_time(cells[1].get_text(" ", strip=True)):
+            continue
+        number_text = cells[2].get_text(" ", strip=True)
+        nums = [int(x) for x in re.findall(r"(?<!\d)(\d{1,2})(?!\d)", number_text)]
+        nums = [x for x in nums if 0 <= x <= 99]
+        if len(nums) != 20:
+            continue
+        dt = datetime(
+            draw_day.year, draw_day.month, draw_day.day, 20, 55, tzinfo=DR_TZ
+        ).astimezone(timezone.utc)
+        out.append(("Super Kino TV", dt, nums))
+
+    seen = set()
+    clean = []
+    for row in out:
+        key = (row[0], row[1].isoformat(), tuple(row[2]))
+        if key not in seen:
+            seen.add(key)
+            clean.append(row)
+    return clean
+
+
 def respectful_wait():
     global _last_request_monotonic
     now=time.monotonic()
@@ -449,6 +489,8 @@ def extract_public_results(html, expected_game=None):
     """
     if expected_game == "Anguilla Mañana":
         return extract_anguilla_manana_history(html)
+    if expected_game == "Super Kino TV":
+        return extract_super_kino_history(html)
 
     soup=BeautifulSoup(html,"html.parser")
     lines=[re.sub(r"\s+"," ",x).strip() for x in soup.get_text("\n",strip=True).splitlines() if x.strip()]
@@ -637,7 +679,15 @@ def collect_current():
                     db.commit()
                 summary.append({"source":src.key,"status":"OK","new":new,"rows":len(rows)})
                 if src.key == "primary":
-                    summary.append(sync_anguilla_manana_recent(src))
+                    for sync_fn in (sync_anguilla_manana_recent, sync_super_kino_recent):
+                        try:
+                            summary.append(sync_fn(src))
+                        except Exception as sync_error:
+                            summary.append({
+                                "source": sync_fn.__name__,
+                                "status": "ERROR",
+                                "message": str(sync_error)[:160],
+                            })
             except Exception as e:
                 summary.append({"source":src.key,"status":"ERROR","message":str(e)[:160]})
         return {"status":"OK","sources":summary}
@@ -773,6 +823,93 @@ def sync_anguilla_manana_recent(src, now=None):
     }
 
 
+def fetch_super_kino_history(src, day):
+    """Consulta una vez la página individual y devuelve solo la fecha pedida."""
+    label = day.strftime("%d-%m-%Y")
+    base = src.url.rstrip("/")
+    root = (
+        base.rstrip("/") + "/resultados"
+        if "/resultados" not in base
+        else base.split("/resultados")[0].rstrip("/") + "/resultados"
+    )
+    url = f"{root}/super-kino-tv/?date={label}"
+    rows = fetch_source(src, url, expected_game="Super Kino TV")
+    matches = [
+        (game, dt, nums) for game, dt, nums in rows
+        if game == "Super Kino TV" and dt.astimezone(DR_TZ).date() == day
+    ]
+    return {"rows": matches, "url": url, "page": 1, "requested_date": label}
+
+
+def sync_super_kino_recent(src, now=None):
+    """Recupera hasta 10 Kino recientes con una petición y caché diaria."""
+    now = now or datetime.now(DR_TZ)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=DR_TZ)
+    local_now = now.astimezone(DR_TZ)
+    target_day = local_now.date()
+    if (local_now.hour, local_now.minute) < (21, 30):
+        target_day -= timedelta(days=1)
+
+    cache_key = f"{src.key}:Super Kino TV:{SUPER_KINO_RECENT_CACHE_VERSION}"
+    with SessionLocal() as db:
+        cached = get_cache(db, cache_key, target_day)
+        if cached and cached.status == "COMPLETE":
+            return {
+                "source": cache_key, "status": "CACHED",
+                "rows": int(cached.rows_found or 0), "new": 0,
+            }
+        if cached and cached.status == "WAITING" and cached.checked_at:
+            checked = cached.checked_at
+            if checked.tzinfo is None:
+                checked = checked.replace(tzinfo=timezone.utc)
+            if checked > datetime.now(timezone.utc) - timedelta(minutes=SUPER_KINO_RETRY_MINUTES):
+                return {
+                    "source": cache_key, "status": "WAITING",
+                    "rows": int(cached.rows_found or 0), "new": 0,
+                }
+
+    label = target_day.strftime("%d-%m-%Y")
+    base = src.url.rstrip("/")
+    root = (
+        base.rstrip("/") + "/resultados"
+        if "/resultados" not in base
+        else base.split("/resultados")[0].rstrip("/") + "/resultados"
+    )
+    url = f"{root}/super-kino-tv/?date={label}"
+    rows = fetch_source(src, url, expected_game="Super Kino TV")
+    rows = [
+        (game, dt, nums) for game, dt, nums in rows
+        if game == "Super Kino TV"
+        and target_day - timedelta(days=45) <= dt.astimezone(DR_TZ).date() <= target_day
+    ]
+    has_target = any(dt.astimezone(DR_TZ).date() == target_day for _, dt, _ in rows)
+
+    touched = set()
+    new = 0
+    with SessionLocal() as db:
+        for game, dt, nums in rows:
+            if ingest_observation(db, src.key, game, dt, nums, url):
+                new += 1
+            touched.add((game, dt))
+        for game, dt in touched:
+            rebuild_canonical(db, game, dt)
+        db.commit()
+        set_cache(
+            db, cache_key, target_day,
+            "COMPLETE" if has_target else "WAITING",
+            len(rows),
+            f"kino-recent-safe; date={label}; rows={len(rows)}; new={new}; target={has_target}",
+        )
+
+    return {
+        "source": cache_key,
+        "status": "OK" if has_target else "WAITING",
+        "rows": len(rows), "new": new,
+        "target_date": target_day.isoformat(),
+    }
+
+
 def collect_history_step():
     """
     V8.2 HISTORICAL SOURCE FIX
@@ -814,6 +951,8 @@ def collect_history_step():
                 cache_key = (
                     f"{src.key}:{game}:{ANGUILLA_10AM_CACHE_VERSION}"
                     if game == "Anguilla Mañana"
+                    else f"{src.key}:{game}:{SUPER_KINO_CACHE_VERSION}"
+                    if game == "Super Kino TV"
                     else f"{src.key}:{game}"
                 )
 
@@ -825,6 +964,11 @@ def collect_history_step():
                 try:
                     if game == "Anguilla Mañana":
                         found = fetch_anguilla_manana_history(src, day)
+                        rows = found["rows"]
+                        url = found["url"]
+                        page_used = found["page"]
+                    elif game == "Super Kino TV":
+                        found = fetch_super_kino_history(src, day)
                         rows = found["rows"]
                         url = found["url"]
                         page_used = found["page"]
@@ -2865,6 +3009,18 @@ def history_status():
             DateCache.source_key.like(f"%Anguilla Mañana:{ANGUILLA_10AM_CACHE_VERSION}%"),
             DateCache.status=="ERROR"
         )) or 0
+        kino_count=db.scalar(select(func.count(CanonicalDraw.id)).where(
+            CanonicalDraw.lottery=="Super Kino TV",
+            CanonicalDraw.verification_state!="CONFLICT"
+        )) or 0
+        kino_latest=db.scalar(select(func.max(CanonicalDraw.draw_time)).where(
+            CanonicalDraw.lottery=="Super Kino TV",
+            CanonicalDraw.verification_state!="CONFLICT"
+        ))
+        kino_errors=db.scalar(select(func.count(DateCache.id)).where(
+            DateCache.source_key.like(f"%Super Kino TV:{SUPER_KINO_CACHE_VERSION}%"),
+            DateCache.status=="ERROR"
+        )) or 0
     return {"cursor_date":cur.cursor_date,"target_date":cur.target_date,"finished":cur.finished,
             "cached_requests":int(cached),"canonical_results":int(canon),
             "anguila_10am":{
@@ -2873,6 +3029,15 @@ def history_status():
                 "latest_draw":ang_latest,
                 "parser_version":ANGUILLA_10AM_CACHE_VERSION,
                 "errors":int(ang_errors),
+                "history_preserved":True
+            },
+            "super_kino_tv":{
+                "status":"RECUPERANDO" if not cur.finished and kino_count < 30 else "OPERATIVO",
+                "draw_count":int(kino_count),
+                "latest_draw":kino_latest,
+                "parser_version":SUPER_KINO_CACHE_VERSION,
+                "errors":int(kino_errors),
+                "expected_numbers":20,
                 "history_preserved":True
             }}
 
